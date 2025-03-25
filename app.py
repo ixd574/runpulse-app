@@ -128,63 +128,80 @@ def parse_document():
         
         try:
             # Step 1: Call the RunPulse API to upload the PDF
-            url = 'https://api.runpulse.com/convert'
+            upload_url = 'https://api.runpulse.com/convert'
             headers = {
                 'x-api-key': API_KEY,
-                'Content-Type': 'application/pdf'  # Explicitly set content type
+                'Content-Type': 'application/pdf'
             }
             
             with open(filepath, 'rb')  as f:
                 file_data = f.read()
                 
-            # Make the API request with the correct content type
-            response = requests.post(
-                url, 
+            # Make the API request to upload the file
+            upload_response = requests.post(
+                upload_url, 
                 headers=headers, 
                 data=file_data
             )
             
-            # Check if the request was successful
-            if response.status_code == 200:
-                # Parse the response to get the presigned URL
-                initial_response = response.json()
-                app.logger.info(f"Initial API response: {initial_response}")
+            # Check if the upload was successful
+            if upload_response.status_code == 200:
+                # Parse the response to get the S3 object URL
+                upload_result = upload_response.json()
+                app.logger.info(f"Upload response: {upload_result}")
                 
-                # Check if we received a presigned URL
-                if 'presigned_url' in initial_response:
-                    app.logger.info("Received presigned URL, fetching document content...")
+                # Check if we received an S3 object URL
+                if 's3_object_url' in upload_result:
+                    s3_url = upload_result['s3_object_url']
+                    app.logger.info(f"Document uploaded to: {s3_url}")
                     
-                    # Wait a moment for processing to complete
-                    time.sleep(2)
+                    # Step 2: Call the extract endpoint to parse the document
+                    extract_url = 'https://api.runpulse.com/extract'
+                    extract_headers = {
+                        'x-api-key': API_KEY,
+                        'Content-Type': 'application/json'
+                    }
                     
-                    # Step 2: Get the actual document content using the presigned URL
-                    try:
-                        # Try to get the document content from the S3 object URL
-                        s3_url = initial_response.get('s3_object_url')
-                        if s3_url:
-                            content_response = requests.get(s3_url)
-                            if content_response.status_code == 200:
-                                try:
-                                    # Try to parse as JSON
-                                    document_content = content_response.json()
-                                    return jsonify(document_content)
-                                except:
-                                    # If not JSON, return the initial response
-                                    return jsonify(initial_response)
-                    except Exception as e:
-                        app.logger.error(f"Error fetching document content: {str(e)}")
+                    # Prepare the request body for extraction
+                    extract_data = {
+                        'url': s3_url,
+                        'return_markdown': True,
+                        'chunking_method': ['semantic', 'recursive'],
+                        'return_tables': True
+                    }
+                    
+                    # Wait a moment for the file to be processed
+                    time.sleep(2) 
+                    
+                    # Make the API request to extract content
+                    extract_response = requests.post(
+                        extract_url,
+                        headers=extract_headers,
+                        json=extract_data
+                    )
+                    
+                    # Check if the extraction was successful
+                    if extract_response.status_code == 200:
+                        # Return the extracted content
+                        return jsonify(extract_response.json())
+                    else:
+                        app.logger.error(f"Extraction failed with status code {extract_response.status_code}: {extract_response.text}")
+                        return jsonify({
+                            'error': f'Extraction failed with status code {extract_response.status_code}',
+                            'message': extract_response.text
+                        }), extract_response.status_code
                 
-                # If we couldn't get the document content, return the initial response
-                return jsonify(initial_response)
+                # If we couldn't get the S3 URL, return the upload response
+                return jsonify(upload_result)
             else:
                 # Log the error
-                app.logger.error(f"API request failed with status code {response.status_code}: {response.text}")
+                app.logger.error(f"Upload failed with status code {upload_response.status_code}: {upload_response.text}")
                 
                 # Return error information
                 return jsonify({
-                    'error': f'API request failed with status code {response.status_code}',
-                    'message': response.text
-                }), response.status_code
+                    'error': f'Upload failed with status code {upload_response.status_code}',
+                    'message': upload_response.text
+                }), upload_response.status_code
         
         except Exception as e:
             app.logger.error(f"Error calling API: {str(e)}")
