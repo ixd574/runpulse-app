@@ -4,184 +4,367 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>RunPulse Document Parser</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body {
-            padding-top: 2rem;
-            padding-bottom: 2rem;
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
         }
-        .result-container {
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+        }
+        .container {
+            background-color: #fff;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .file-upload {
+            margin-bottom: 20px;
+        }
+        .file-upload label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        .file-upload input[type="file"] {
+            margin-bottom: 10px;
+        }
+        .btn {
+            background-color: #4285f4;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .btn:hover {
+            background-color: #3367d6;
+        }
+        .results {
             display: flex;
-            min-height: 500px;
-            margin-top: 2rem;
+            gap: 20px;
         }
-        .result-panel {
+        .json-output, .formatted-output {
             flex: 1;
-            padding: 1rem;
-            border: 1px solid #dee2e6;
-            border-radius: 0.25rem;
+            background-color: #fff;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             overflow: auto;
-            max-height: 80vh;
+            max-height: 800px;
         }
-        .raw-json {
-            background-color: #f8f9fa;
+        .json-output {
             font-family: monospace;
             white-space: pre-wrap;
+            background-color: #f8f9fa;
         }
-        .formatted-view {
-            background-color: white;
-        }
-        .divider {
-            width: 1px;
-            background-color: #dee2e6;
-            margin: 0 1rem;
+        .formatted-output h2 {
+            margin-top: 0;
+            color: #333;
         }
         .loading {
             display: none;
             text-align: center;
-            margin-top: 2rem;
+            margin: 20px 0;
+        }
+        .chunking-section {
+            margin-top: 30px;
+        }
+        .chunk {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            border-left: 3px solid #4285f4;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 15px 0;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        pre {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        code {
+            font-family: monospace;
+        }
+        hr {
+            border: 0;
+            height: 1px;
+            background-color: #ddd;
+            margin: 20px 0;
+        }
+        .logout {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+        }
+        .logout a {
+            color: #4285f4;
+            text-decoration: none;
+        }
+        .logout a:hover {
+            text-decoration: underline;
         }
     </style>
 </head>
 <body>
+    <div class="logout">
+        <a href="/logout">Logout</a>
+    </div>
+    <h1>RunPulse Document Parser</h1>
+    
     <div class="container">
-        <h1 class="mb-4">RunPulse Document Parser</h1>
+        <div class="file-upload">
+            <h2>Upload Document</h2>
+            <label for="file">Select a file to parse (PDF, DOCX, etc.)</label>
+            <input type="file" id="file" name="file">
+            <button class="btn" id="parseBtn">Parse Document</button>
+        </div>
         
-        <div class="card">
-            <div class="card-body">
-                <h5 class="card-title">Upload Document</h5>
-                <form id="upload-form" enctype="multipart/form-data">
-                    <div class="mb-3">
-                        <label for="file" class="form-label">Select a file to parse (PDF, DOCX, etc.)</label>
-                        <input type="file" class="form-control" id="file" name="file" required>
-                    </div>
-                    <button type="submit" class="btn btn-primary">Parse Document</button>
-                </form>
-            </div>
-        </div>
-
-        <div id="loading" class="loading">
-            <div class="spinner-border text-primary" role="status">
-                <span class="visually-hidden">Loading...</span>
-            </div>
-            <p class="mt-2">Processing your document, please wait...</p>
-        </div>
-
-        <div id="result-container" class="result-container" style="display: none;">
-            <div id="raw-json" class="result-panel raw-json"></div>
-            <div class="divider"></div>
-            <div id="formatted-view" class="result-panel formatted-view"></div>
+        <div class="loading" id="loading">
+            <p>Processing document, please wait...</p>
         </div>
     </div>
+    
+    <div class="results" id="results" style="display: none;">
+        <div class="json-output" id="jsonOutput"></div>
+        <div class="formatted-output" id="formattedOutput"></div>
+    </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script>
-        document.getElementById('upload-form').addEventListener('submit', async function(e) {
-            e.preventDefault();
-            
+        document.getElementById('parseBtn').addEventListener('click', function() {
             const fileInput = document.getElementById('file');
-            if (!fileInput.files.length) {
-                alert('Please select a file to upload');
+            if (fileInput.files.length === 0) {
+                alert('Please select a file to parse');
                 return;
             }
-
+            
+            const file = fileInput.files[0];
             const formData = new FormData();
-            formData.append('file', fileInput.files[0]);
-
+            formData.append('file', file);
+            
             // Show loading indicator
             document.getElementById('loading').style.display = 'block';
-            document.getElementById('result-container').style.display = 'none';
-
-            try {
-                const response = await fetch('/parse', {
-                    method: 'POST',
-                    body: formData
-                });
-
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-
-                const data = await response.json();
+            document.getElementById('results').style.display = 'none';
+            
+            fetch('/parse', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Hide loading indicator
+                document.getElementById('loading').style.display = 'none';
+                
+                // Display the results
+                document.getElementById('results').style.display = 'flex';
                 
                 // Display raw JSON
-                const rawJsonElement = document.getElementById('raw-json');
-                rawJsonElement.textContent = JSON.stringify(data, null, 2);
+                document.getElementById('jsonOutput').textContent = JSON.stringify(data, null, 2);
                 
-                // Display formatted view
-                const formattedViewElement = document.getElementById('formatted-view');
-                
-                let formattedContent = '<h2>Document Content</h2>';
+                // Format and display the content
+                const formattedOutput = document.getElementById('formattedOutput');
+                formattedOutput.innerHTML = '<h2>Document Content</h2>';
                 
                 // Add markdown content if available
                 if (data.markdown) {
-                    formattedContent += '<div class="markdown-content">';
-                    formattedContent += marked.parse(data.markdown);
-                    formattedContent += '</div>';
+                    formattedOutput.innerHTML += renderMarkdown(data.markdown);
                 }
                 
-                // Add chunking information if available
+                // Add chunking results if available
                 if (data.chunking) {
-                    formattedContent += '<h3>Chunking Results</h3>';
+                    formattedOutput.innerHTML += '<h2>Chunking Results</h2>';
                     
+                    // Add semantic chunks
                     if (data.chunking.semantic && data.chunking.semantic.length > 0) {
-                        formattedContent += '<h4>Semantic Chunks</h4><ul>';
+                        formattedOutput.innerHTML += '<h3>Semantic Chunks</h3>';
                         data.chunking.semantic.forEach(chunk => {
-                            formattedContent += `<li><strong>Chunk ${chunk.chunk_number}</strong>: ${chunk.content}</li>`;
+                            formattedOutput.innerHTML += `
+                                <div class="chunk">
+                                    <strong>Chunk ${chunk.chunk_number}:</strong> ${chunk.content}
+                                </div>
+                            `;
                         });
-                        formattedContent += '</ul>';
                     }
                     
+                    // Add recursive chunks
                     if (data.chunking.recursive && data.chunking.recursive.length > 0) {
-                        formattedContent += '<h4>Recursive Chunks</h4><ul>';
+                        formattedOutput.innerHTML += '<h3>Recursive Chunks</h3>';
                         data.chunking.recursive.forEach(chunk => {
-                            formattedContent += `<li><strong>Chunk ${chunk.chunk_number}</strong>: ${chunk.content}</li>`;
+                            formattedOutput.innerHTML += `
+                                <div class="chunk">
+                                    <strong>Chunk ${chunk.chunk_number}:</strong> ${chunk.content}
+                                </div>
+                            `;
                         });
-                        formattedContent += '</ul>';
+                    }
+                    
+                    // Add page chunks if available
+                    if (data.chunking.page && data.chunking.page.length > 0) {
+                        formattedOutput.innerHTML += '<h3>Page Chunks</h3>';
+                        data.chunking.page.forEach(chunk => {
+                            formattedOutput.innerHTML += `
+                                <div class="chunk">
+                                    <strong>Page ${chunk.chunk_number}:</strong> ${chunk.content}
+                                </div>
+                            `;
+                        });
+                    }
+                    
+                    // Add header chunks if available
+                    if (data.chunking.header && data.chunking.header.length > 0) {
+                        formattedOutput.innerHTML += '<h3>Header Chunks</h3>';
+                        data.chunking.header.forEach(chunk => {
+                            formattedOutput.innerHTML += `
+                                <div class="chunk">
+                                    <strong>Header ${chunk.chunk_number}:</strong> ${chunk.content}
+                                </div>
+                            `;
+                        });
                     }
                 }
                 
                 // Add schema-json if available
                 if (data['schema-json']) {
-                    formattedContent += '<h3>Extracted Schema</h3>';
-                    formattedContent += '<div class="schema-json">';
-                    formattedContent += '<pre>' + JSON.stringify(data['schema-json'], null, 2) + '</pre>';
-                    formattedContent += '</div>';
+                    formattedOutput.innerHTML += '<h2>Extracted Schema</h2>';
+                    formattedOutput.innerHTML += `<pre><code>${JSON.stringify(data['schema-json'], null, 2)}</code></pre>`;
                 }
                 
                 // Add tables if available
                 if (data.tables && data.tables.length > 0) {
-                    formattedContent += '<h3>Extracted Tables</h3>';
-                    data.tables.forEach(table => {
-                        formattedContent += `<h4>Table ${table.table_id}</h4>`;
-                        formattedContent += '<div class="table-content">';
-                        formattedContent += marked.parse(table.content);
-                        formattedContent += '</div>';
+                    formattedOutput.innerHTML += '<h2>Extracted Tables</h2>';
+                    data.tables.forEach((table, index) => {
+                        formattedOutput.innerHTML += `<h3>Table ${index + 1}</h3>`;
+                        formattedOutput.innerHTML += renderMarkdown(table.content);
                     });
                 }
                 
                 // Add plan info if available
                 if (data['plan-info']) {
-                    formattedContent += '<h3>Plan Information</h3>';
-                    formattedContent += '<div class="plan-info">';
-                    formattedContent += `<p>Pages used: ${data['plan-info'].pages_used}</p>`;
-                    formattedContent += `<p>Tier: ${data['plan-info'].tier}</p>`;
-                    formattedContent += '</div>';
+                    formattedOutput.innerHTML += '<h2>Plan Information</h2>';
+                    formattedOutput.innerHTML += `<pre><code>${JSON.stringify(data['plan-info'], null, 2)}</code></pre>`;
                 }
-                
-                formattedViewElement.innerHTML = formattedContent;
-                
-                // Show results
-                document.getElementById('result-container').style.display = 'flex';
-            } catch (error) {
-                console.error('Error:', error);
-                alert('An error occurred while processing the document. Please try again.');
-            } finally {
+            })
+            .catch(error => {
                 // Hide loading indicator
                 document.getElementById('loading').style.display = 'none';
-            }
+                alert('Error parsing document: ' + error);
+            });
         });
+        
+        // Simple markdown renderer
+        function renderMarkdown(markdown) {
+            if (!markdown) return '';
+            
+            // Handle headings
+            let html = markdown
+                .replace(/^# (.*$)/gm, '<h1>$1</h1>')
+                .replace(/^## (.*$)/gm, '<h2>$1</h2>')
+                .replace(/^### (.*$)/gm, '<h3>$1</h3>')
+                .replace(/^#### (.*$)/gm, '<h4>$1</h4>')
+                .replace(/^##### (.*$)/gm, '<h5>$1</h5>')
+                .replace(/^###### (.*$)/gm, '<h6>$1</h6>');
+            
+            // Handle bold
+            html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+            
+            // Handle italic
+            html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
+            
+            // Handle links
+            html = html.replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2">$1</a>');
+            
+            // Handle code blocks
+            html = html.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
+            
+            // Handle inline code
+            html = html.replace(/`(.*?)`/g, '<code>$1</code>');
+            
+            // Handle horizontal rules
+            html = html.replace(/^\-\-\-$/gm, '<hr>');
+            
+            // Handle unordered lists
+            html = html.replace(/^\- (.*$)/gm, '<ul><li>$1</li></ul>');
+            html = html.replace(/<\/ul><ul>/g, '');
+            
+            // Handle ordered lists
+            html = html.replace(/^\d+\. (.*$)/gm, '<ol><li>$1</li></ol>');
+            html = html.replace(/<\/ol><ol>/g, '');
+            
+            // Handle paragraphs
+            html = html.replace(/^(?!<[h|u|o|p|b])(.*$)/gm, '<p>$1</p>');
+            html = html.replace(/<p><\/p>/g, '');
+            
+            // Handle line breaks
+            html = html.replace(/\n/g, '<br>');
+            
+            // Handle tables (preserve as is)
+            html = html.replace(/\|.*\|/g, function(match) {
+                return match;
+            });
+            
+            // Process tables
+            html = processMarkdownTables(html);
+            
+            return html;
+        }
+        
+        // Process markdown tables
+        function processMarkdownTables(html) {
+            // Find table rows
+            const tableRegex = /(\|.*\|(\r?\n|\r))+/g;
+            return html.replace(tableRegex, function(match) {
+                // Split into rows
+                const rows = match.split(/\r?\n|\r/).filter(row => row.trim().length > 0);
+                if (rows.length < 2) return match;
+                
+                let tableHtml = '<table>';
+                
+                // Process each row
+                rows.forEach((row, rowIndex) => {
+                    // Clean up the row
+                    const cells = row.split('|').filter(cell => cell.trim().length > 0 || cell === ' ');
+                    
+                    if (rowIndex === 0) {
+                        // Header row
+                        tableHtml += '<thead><tr>';
+                        cells.forEach(cell => {
+                            tableHtml += `<th>${cell.trim()}</th>`;
+                        });
+                        tableHtml += '</tr></thead><tbody>';
+                    } else if (rowIndex === 1 && row.includes('-')) {
+                        // Separator row, skip it
+                    } else {
+                        // Data row
+                        tableHtml += '<tr>';
+                        cells.forEach(cell => {
+                            tableHtml += `<td>${cell.trim()}</td>`;
+                        });
+                        tableHtml += '</tr>';
+                    }
+                });
+                
+                tableHtml += '</tbody></table>';
+                return tableHtml;
+            });
+        }
     </script>
 </body>
 </html>
