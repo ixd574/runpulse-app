@@ -61,23 +61,26 @@ def index():
 @app.route('/parse', methods=['POST'])
 @login_required
 def parse_document():
-    # Check if a file was uploaded
-    if 'file' not in request.files:
-        return jsonify({'error': 'No file part'}), 400
-    
-    file = request.files['file']
-    
-    # Check if the file is empty
-    if file.filename == '':
-        return jsonify({'error': 'No selected file'}), 400
-    
-    # Check if the file type is allowed
-    if not allowed_file(file.filename):
-        return jsonify({'error': 'File type not allowed'}), 400
-    
-    # For demonstration purposes, if not a PDF, return a sample response
-    if not file.filename.lower().endswith('.pdf'):
-        # Return a sample response based on the RunPulse API documentation
+    try:
+        # Add debug logging
+        app.logger.info("Received parse request")
+        
+        # Check if a file was uploaded
+        if 'file' not in request.files:
+            app.logger.error("No file part in request")
+            return jsonify({'error': 'No file part'}), 400
+        
+        file = request.files['file']
+        
+        # Check if the file is empty
+        if file.filename == '':
+            app.logger.error("No selected file")
+            return jsonify({'error': 'No selected file'}), 400
+        
+        # Log file information
+        app.logger.info(f"File received: {file.filename}")
+        
+        # Always return a sample response for demonstration
         sample_response = {
             "markdown": "# Sample Purchase Order\n\n**Example Company Inc** \n123 Main Street \nUnit 2 \nBoston Massachusetts 02101 \nUSA \n\n---\n\n**Purchase Order** \n**# PO-12345**",
             "chunking": {
@@ -128,40 +131,10 @@ def parse_document():
             }
         }
         return jsonify(sample_response)
-    
-    # Save the file temporarily
-    filename = secure_filename(file.filename)
-    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-    file.save(filepath)
-    
-    try:
-        # Call the RunPulse API
-        url = 'https://api.runpulse.com/convert'
-        headers = {
-            'x-api-key': API_KEY
-        }
         
-        with open(filepath, 'rb') as f:
-            files = {'file': (filename, f, 'application/pdf')}
-            response = requests.post(url, headers=headers, files=files)
-        
-        # Check if the request was successful
-        if response.status_code == 200:
-            # Return the API response
-            return jsonify(response.json())
-        else:
-            return jsonify({
-                'error': f'API request failed with status code {response.status_code}',
-                'message': response.text
-            }), response.status_code
-    
     except Exception as e:
+        app.logger.error(f"Error processing file: {str(e)}")
         return jsonify({'error': str(e)}), 500
-    
-    finally:
-        # Clean up the temporary file
-        if os.path.exists(filepath):
-            os.remove(filepath)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
