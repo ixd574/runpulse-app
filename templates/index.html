@@ -122,6 +122,15 @@
         .logout a:hover {
             text-decoration: underline;
         }
+        .raw-table {
+            font-family: monospace;
+            white-space: pre;
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            border: 1px solid #ddd;
+        }
     </style>
 </head>
 <body>
@@ -252,7 +261,18 @@
                     formattedOutput.innerHTML += '<h2>Extracted Tables</h2>';
                     data.tables.forEach((table, index) => {
                         formattedOutput.innerHTML += `<h3>Table ${index + 1}</h3>`;
-                        formattedOutput.innerHTML += renderMarkdown(table.content);
+                        // Display the raw table content in a pre-formatted block
+                        formattedOutput.innerHTML += `<div class="raw-table">${table.content}</div>`;
+                        
+                        // Also try to render it as a proper HTML table
+                        try {
+                            const htmlTable = convertMarkdownTableToHTML(table.content);
+                            if (htmlTable) {
+                                formattedOutput.innerHTML += htmlTable;
+                            }
+                        } catch (e) {
+                            console.error("Error rendering table:", e);
+                        }
                     });
                 }
                 
@@ -272,6 +292,18 @@
         // Simple markdown renderer
         function renderMarkdown(markdown) {
             if (!markdown) return '';
+            
+            // First, identify and temporarily replace tables to protect them
+            const tables = [];
+            let tableIndex = 0;
+            
+            // Extract tables
+            markdown = markdown.replace(/(\|.*\|(\r?\n|\r))+/g, function(match) {
+                const placeholder = `__TABLE_PLACEHOLDER_${tableIndex}__`;
+                tables.push({ placeholder, content: match });
+                tableIndex++;
+                return placeholder;
+            });
             
             // Handle headings
             let html = markdown
@@ -315,55 +347,69 @@
             // Handle line breaks
             html = html.replace(/\n/g, '<br>');
             
-            // Handle tables (preserve as is)
-            html = html.replace(/\|.*\|/g, function(match) {
-                return match;
+            // Restore tables
+            tables.forEach(table => {
+                // Display the raw table content in a pre-formatted block
+                const rawTable = `<div class="raw-table">${table.content}</div>`;
+                
+                // Also try to render it as a proper HTML table
+                let htmlTable = '';
+                try {
+                    const renderedTable = convertMarkdownTableToHTML(table.content);
+                    if (renderedTable) {
+                        htmlTable = renderedTable;
+                    }
+                } catch (e) {
+                    console.error("Error rendering table:", e);
+                }
+                
+                html = html.replace(table.placeholder, rawTable + htmlTable);
             });
-            
-            // Process tables
-            html = processMarkdownTables(html);
             
             return html;
         }
         
-        // Process markdown tables
-        function processMarkdownTables(html) {
-            // Find table rows
-            const tableRegex = /(\|.*\|(\r?\n|\r))+/g;
-            return html.replace(tableRegex, function(match) {
-                // Split into rows
-                const rows = match.split(/\r?\n|\r/).filter(row => row.trim().length > 0);
-                if (rows.length < 2) return match;
+        // Convert markdown table to HTML
+        function convertMarkdownTableToHTML(markdownTable) {
+            if (!markdownTable) return '';
+            
+            // Split into rows
+            const rows = markdownTable.split(/\r?\n|\r/).filter(row => row.trim().length > 0);
+            if (rows.length < 1) return '';
+            
+            let tableHtml = '<table>';
+            let isFirstRow = true;
+            
+            // Process each row
+            rows.forEach((row, rowIndex) => {
+                // Skip separator rows (those with only dashes and pipes)
+                if (row.replace(/\|/g, '').replace(/-/g, '').trim() === '') {
+                    return;
+                }
                 
-                let tableHtml = '<table>';
+                // Clean up the row and split into cells
+                const cells = row.split('|').map(cell => cell.trim()).filter(cell => cell !== '');
                 
-                // Process each row
-                rows.forEach((row, rowIndex) => {
-                    // Clean up the row
-                    const cells = row.split('|').filter(cell => cell.trim().length > 0 || cell === ' ');
-                    
-                    if (rowIndex === 0) {
-                        // Header row
-                        tableHtml += '<thead><tr>';
-                        cells.forEach(cell => {
-                            tableHtml += `<th>${cell.trim()}</th>`;
-                        });
-                        tableHtml += '</tr></thead><tbody>';
-                    } else if (rowIndex === 1 && row.includes('-')) {
-                        // Separator row, skip it
-                    } else {
-                        // Data row
-                        tableHtml += '<tr>';
-                        cells.forEach(cell => {
-                            tableHtml += `<td>${cell.trim()}</td>`;
-                        });
-                        tableHtml += '</tr>';
-                    }
-                });
-                
-                tableHtml += '</tbody></table>';
-                return tableHtml;
+                if (isFirstRow) {
+                    // Header row
+                    tableHtml += '<thead><tr>';
+                    cells.forEach(cell => {
+                        tableHtml += `<th>${cell}</th>`;
+                    });
+                    tableHtml += '</tr></thead><tbody>';
+                    isFirstRow = false;
+                } else {
+                    // Data row
+                    tableHtml += '<tr>';
+                    cells.forEach(cell => {
+                        tableHtml += `<td>${cell}</td>`;
+                    });
+                    tableHtml += '</tr>';
+                }
             });
+            
+            tableHtml += '</tbody></table>';
+            return tableHtml;
         }
     </script>
 </body>
