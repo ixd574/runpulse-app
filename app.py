@@ -127,8 +127,7 @@ def parse_document():
         file.save(filepath)
         
         try:
-            # After reviewing the documentation more carefully, we'll use the extract endpoint directly
-            # with the file upload instead of the two-step process
+            # Use the extract endpoint directly with the file upload
             extract_url = 'https://api.runpulse.com/extract'
             headers = {
                 'x-api-key': API_KEY
@@ -139,11 +138,13 @@ def parse_document():
                 'file': (filename, open(filepath, 'rb') , 'application/pdf')
             }
             
-            # Prepare the form data
+            # Prepare the form data with all available options to get the most complete output
             data = {
                 'return_markdown': 'true',
-                'chunking_method': 'semantic,recursive',
-                'return_tables': 'true'
+                'chunking_method': 'semantic,recursive,page,header',  # Request all chunking methods
+                'return_tables': 'true',
+                'return_schema': 'true',
+                'return_plan': 'true'
             }
             
             # Make the API request to extract content
@@ -158,7 +159,7 @@ def parse_document():
             # Check if the extraction was successful
             if extract_response.status_code == 200:
                 app.logger.info("Extraction successful")
-                # Return the extracted content
+                # Return the complete extracted content
                 return jsonify(extract_response.json())
             else:
                 app.logger.error(f"Extraction failed with status code {extract_response.status_code}: {extract_response.text}")
