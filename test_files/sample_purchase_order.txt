@@ -1,0 +1,19 @@
+This is a sample document for testing the RunPulse API integration.
+
+# Sample Purchase Order
+
+**Example Company Inc** 
+123 Main Street 
+Unit 2 
+Boston Massachusetts 02101 
+USA 
+
+---
+
+**Purchase Order** 
+**# PO-12345**
+
+| # | Item & Description | Qty | Rate | Amount |
+|----|-------------------|------|----------|----------|
+| 1 | Setup Fee | 1.00 | 1,000.00 | 1,000.00 |
+| 2 | Product A | 50.00| 30.00 | 1,500.00 |

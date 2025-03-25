@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RunPulse Document Parser</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            padding-top: 2rem;
+            padding-bottom: 2rem;
+        }
+        .result-container {
+            display: flex;
+            min-height: 500px;
+            margin-top: 2rem;
+        }
+        .result-panel {
+            flex: 1;
+            padding: 1rem;
+            border: 1px solid #dee2e6;
+            border-radius: 0.25rem;
+            overflow: auto;
+            max-height: 80vh;
+        }
+        .raw-json {
+            background-color: #f8f9fa;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+        .formatted-view {
+            background-color: white;
+        }
+        .divider {
+            width: 1px;
+            background-color: #dee2e6;
+            margin: 0 1rem;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            margin-top: 2rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="mb-4">RunPulse Document Parser</h1>
+        
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Upload Document</h5>
+                <form id="upload-form" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label for="file" class="form-label">Select a file to parse (PDF, DOCX, etc.)</label>
+                        <input type="file" class="form-control" id="file" name="file" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Parse Document</button>
+                </form>
+            </div>
+        </div>
+
+        <div id="loading" class="loading">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2">Processing your document, please wait...</p>
+        </div>
+
+        <div id="result-container" class="result-container" style="display: none;">
+            <div id="raw-json" class="result-panel raw-json"></div>
+            <div class="divider"></div>
+            <div id="formatted-view" class="result-panel formatted-view"></div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script>
+        document.getElementById('upload-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const fileInput = document.getElementById('file');
+            if (!fileInput.files.length) {
+                alert('Please select a file to upload');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+
+            // Show loading indicator
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('result-container').style.display = 'none';
+
+            try {
+                const response = await fetch('/parse', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                
+                // Display raw JSON
+                const rawJsonElement = document.getElementById('raw-json');
+                rawJsonElement.textContent = JSON.stringify(data, null, 2);
+                
+                // Display formatted view
+                const formattedViewElement = document.getElementById('formatted-view');
+                
+                let formattedContent = '<h2>Document Content</h2>';
+                
+                // Add markdown content if available
+                if (data.markdown) {
+                    formattedContent += '<div class="markdown-content">';
+                    formattedContent += marked.parse(data.markdown);
+                    formattedContent += '</div>';
+                }
+                
+                // Add chunking information if available
+                if (data.chunking) {
+                    formattedContent += '<h3>Chunking Results</h3>';
+                    
+                    if (data.chunking.semantic && data.chunking.semantic.length > 0) {
+                        formattedContent += '<h4>Semantic Chunks</h4><ul>';
+                        data.chunking.semantic.forEach(chunk => {
+                            formattedContent += `<li><strong>Chunk ${chunk.chunk_number}</strong>: ${chunk.content}</li>`;
+                        });
+                        formattedContent += '</ul>';
+                    }
+                    
+                    if (data.chunking.recursive && data.chunking.recursive.length > 0) {
+                        formattedContent += '<h4>Recursive Chunks</h4><ul>';
+                        data.chunking.recursive.forEach(chunk => {
+                            formattedContent += `<li><strong>Chunk ${chunk.chunk_number}</strong>: ${chunk.content}</li>`;
+                        });
+                        formattedContent += '</ul>';
+                    }
+                }
+                
+                // Add schema-json if available
+                if (data['schema-json']) {
+                    formattedContent += '<h3>Extracted Schema</h3>';
+                    formattedContent += '<div class="schema-json">';
+                    formattedContent += '<pre>' + JSON.stringify(data['schema-json'], null, 2) + '</pre>';
+                    formattedContent += '</div>';
+                }
+                
+                // Add tables if available
+                if (data.tables && data.tables.length > 0) {
+                    formattedContent += '<h3>Extracted Tables</h3>';
+                    data.tables.forEach(table => {
+                        formattedContent += `<h4>Table ${table.table_id}</h4>`;
+                        formattedContent += '<div class="table-content">';
+                        formattedContent += marked.parse(table.content);
+                        formattedContent += '</div>';
+                    });
+                }
+                
+                // Add plan info if available
+                if (data['plan-info']) {
+                    formattedContent += '<h3>Plan Information</h3>';
+                    formattedContent += '<div class="plan-info">';
+                    formattedContent += `<p>Pages used: ${data['plan-info'].pages_used}</p>`;
+                    formattedContent += `<p>Tier: ${data['plan-info'].tier}</p>`;
+                    formattedContent += '</div>';
+                }
+                
+                formattedViewElement.innerHTML = formattedContent;
+                
+                // Show results
+                document.getElementById('result-container').style.display = 'flex';
+            } catch (error) {
+                console.error('Error:', error);
+                alert('An error occurred while processing the document. Please try again.');
+            } finally {
+                // Hide loading indicator
+                document.getElementById('loading').style.display = 'none';
+            }
+        });
+    </script>
+</body>
+</html>
