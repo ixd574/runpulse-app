@@ -80,58 +80,88 @@ def parse_document():
         # Log file information
         app.logger.info(f"File received: {file.filename}")
         
-        # Always return a sample response for demonstration
-        sample_response = {
-            "markdown": "# Sample Purchase Order\n\n**Example Company Inc** \n123 Main Street \nUnit 2 \nBoston Massachusetts 02101 \nUSA \n\n---\n\n**Purchase Order** \n**# PO-12345**",
-            "chunking": {
-                "recursive": [
-                    {
-                        "chunk_number": 1,
-                        "content": "# Sample Purchase Order",
-                        "length": 29,
-                        "method": "recursive"
-                    },
-                    {
-                        "chunk_number": 2,
-                        "content": "**Example Company Inc** \n123 Main Street \nUnit 2 \nBoston Massachusetts 02101",
-                        "length": 95,
-                        "method": "recursive"
-                    }
-                ],
-                "semantic": [
-                    {
-                        "chunk_number": 1,
-                        "content": "Sample Purchase Order from Example Company Inc located at 123 Main Street, Unit 2, Boston Massachusetts 02101",
-                        "length": 112,
-                        "method": "semantic"
-                    }
-                ]
-            },
-            "schema-json": {
-                "company": "Example Company Inc",
-                "purchase_order_number": "PO-12345",
-                "address": {
-                    "street": "123 Main Street",
-                    "unit": "Unit 2",
-                    "city": "Boston",
-                    "state": "Massachusetts",
-                    "zip": "02101",
-                    "country": "USA"
-                }
-            },
-            "tables": [
-                {
-                    "table_id": 1,
-                    "content": "| # | Item & Description | Qty | Rate | Amount |\n|----|-------------------|------|----------|----------|\n| 1 | Setup Fee | 1.00 | 1,000.00 | 1,000.00 |\n| 2 | Product A | 50.00| 30.00 | 1,500.00 |"
-                }
-            ],
-            "plan-info": {
-                "pages_used": 19998,
-                "tier": "foundation"
-            }
-        }
-        return jsonify(sample_response)
+        # Check if the file type is allowed
+        if not allowed_file(file.filename):
+            app.logger.error("File type not allowed")
+            return jsonify({'error': 'File type not allowed'}), 400
         
+        # Save the file temporarily
+        filename = secure_filename(file.filename)
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        file.save(filepath)
+        
+        try:
+            # Call the RunPulse API
+            url = 'https://api.runpulse.com/convert'
+            headers = {
+                'x-api-key': API_KEY
+            }
+            
+            with open(filepath, 'rb')  as f:
+                files = {'file': (filename, f, 'application/octet-stream')}
+                response = requests.post(url, headers=headers, files=files)
+            
+            # Check if the request was successful
+            if response.status_code == 200:
+                # Return the API response
+                return jsonify(response.json())
+            else:
+                # If API call fails, fall back to sample response
+                app.logger.error(f"API request failed with status code {response.status_code}: {response.text}")
+                
+                # For PDF files that fail, provide a more specific error
+                if filename.lower().endswith('.pdf'):
+                    return jsonify({
+                        'error': f'API request failed with status code {response.status_code}',
+                        'message': response.text
+                    }), response.status_code
+                
+                # For non-PDF files, return a sample response with a warning
+                sample_response = {
+                    "markdown": "# Sample Response (API Limitation)\n\nThe RunPulse API only accepts PDF files. This is sample output to demonstrate the interface.",
+                    "chunking": {
+                        "recursive": [
+                            {
+                                "chunk_number": 1,
+                                "content": "# Sample Response (API Limitation)",
+                                "length": 29,
+                                "method": "recursive"
+                            },
+                            {
+                                "chunk_number": 2,
+                                "content": "The RunPulse API only accepts PDF files. This is sample output to demonstrate the interface.",
+                                "length": 95,
+                                "method": "recursive"
+                            }
+                        ],
+                        "semantic": [
+                            {
+                                "chunk_number": 1,
+                                "content": "The RunPulse API only accepts PDF files. This is sample output to demonstrate the interface.",
+                                "length": 112,
+                                "method": "semantic"
+                            }
+                        ]
+                    },
+                    "schema-json": {
+                        "note": "This is sample data. The RunPulse API only accepts PDF files."
+                    },
+                    "tables": [],
+                    "plan-info": {
+                        "note": "This is sample data. The RunPulse API only accepts PDF files."
+                    }
+                }
+                return jsonify(sample_response)
+        
+        except Exception as e:
+            app.logger.error(f"Error calling API: {str(e)}")
+            return jsonify({'error': f'Error calling API: {str(e)}'}), 500
+        
+        finally:
+            # Clean up the temporary file
+            if os.path.exists(filepath):
+                os.remove(filepath)
+    
     except Exception as e:
         app.logger.error(f"Error processing file: {str(e)}")
         return jsonify({'error': str(e)}), 500
