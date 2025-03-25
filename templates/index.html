@@ -261,18 +261,8 @@
                     formattedOutput.innerHTML += '<h2>Extracted Tables</h2>';
                     data.tables.forEach((table, index) => {
                         formattedOutput.innerHTML += `<h3>Table ${index + 1}</h3>`;
-                        // Display the raw table content in a pre-formatted block
+                        // Only display the raw table content in a pre-formatted block
                         formattedOutput.innerHTML += `<div class="raw-table">${table.content}</div>`;
-                        
-                        // Also try to render it as a proper HTML table
-                        try {
-                            const htmlTable = convertMarkdownTableToHTML(table.content);
-                            if (htmlTable) {
-                                formattedOutput.innerHTML += htmlTable;
-                            }
-                        } catch (e) {
-                            console.error("Error rendering table:", e);
-                        }
                     });
                 }
                 
@@ -351,65 +341,10 @@
             tables.forEach(table => {
                 // Display the raw table content in a pre-formatted block
                 const rawTable = `<div class="raw-table">${table.content}</div>`;
-                
-                // Also try to render it as a proper HTML table
-                let htmlTable = '';
-                try {
-                    const renderedTable = convertMarkdownTableToHTML(table.content);
-                    if (renderedTable) {
-                        htmlTable = renderedTable;
-                    }
-                } catch (e) {
-                    console.error("Error rendering table:", e);
-                }
-                
-                html = html.replace(table.placeholder, rawTable + htmlTable);
+                html = html.replace(table.placeholder, rawTable);
             });
             
             return html;
-        }
-        
-        // Convert markdown table to HTML
-        function convertMarkdownTableToHTML(markdownTable) {
-            if (!markdownTable) return '';
-            
-            // Split into rows
-            const rows = markdownTable.split(/\r?\n|\r/).filter(row => row.trim().length > 0);
-            if (rows.length < 1) return '';
-            
-            let tableHtml = '<table>';
-            let isFirstRow = true;
-            
-            // Process each row
-            rows.forEach((row, rowIndex) => {
-                // Skip separator rows (those with only dashes and pipes)
-                if (row.replace(/\|/g, '').replace(/-/g, '').trim() === '') {
-                    return;
-                }
-                
-                // Clean up the row and split into cells
-                const cells = row.split('|').map(cell => cell.trim()).filter(cell => cell !== '');
-                
-                if (isFirstRow) {
-                    // Header row
-                    tableHtml += '<thead><tr>';
-                    cells.forEach(cell => {
-                        tableHtml += `<th>${cell}</th>`;
-                    });
-                    tableHtml += '</tr></thead><tbody>';
-                    isFirstRow = false;
-                } else {
-                    // Data row
-                    tableHtml += '<tr>';
-                    cells.forEach(cell => {
-                        tableHtml += `<td>${cell}</td>`;
-                    });
-                    tableHtml += '</tr>';
-                }
-            });
-            
-            tableHtml += '</tbody></table>';
-            return tableHtml;
         }
     </script>
 </body>
