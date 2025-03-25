@@ -5,6 +5,7 @@ from flask import Flask, render_template, request, jsonify, redirect, url_for, s
 from dotenv import load_dotenv
 from werkzeug.utils import secure_filename
 from functools import wraps
+import time
 
 # Load environment variables
 load_dotenv()
@@ -126,7 +127,7 @@ def parse_document():
         file.save(filepath)
         
         try:
-            # Call the RunPulse API
+            # Step 1: Call the RunPulse API to upload the PDF
             url = 'https://api.runpulse.com/convert'
             headers = {
                 'x-api-key': API_KEY,
@@ -145,8 +146,36 @@ def parse_document():
             
             # Check if the request was successful
             if response.status_code == 200:
-                # Return the API response
-                return jsonify(response.json())
+                # Parse the response to get the presigned URL
+                initial_response = response.json()
+                app.logger.info(f"Initial API response: {initial_response}")
+                
+                # Check if we received a presigned URL
+                if 'presigned_url' in initial_response:
+                    app.logger.info("Received presigned URL, fetching document content...")
+                    
+                    # Wait a moment for processing to complete
+                    time.sleep(2)
+                    
+                    # Step 2: Get the actual document content using the presigned URL
+                    try:
+                        # Try to get the document content from the S3 object URL
+                        s3_url = initial_response.get('s3_object_url')
+                        if s3_url:
+                            content_response = requests.get(s3_url)
+                            if content_response.status_code == 200:
+                                try:
+                                    # Try to parse as JSON
+                                    document_content = content_response.json()
+                                    return jsonify(document_content)
+                                except:
+                                    # If not JSON, return the initial response
+                                    return jsonify(initial_response)
+                    except Exception as e:
+                        app.logger.error(f"Error fetching document content: {str(e)}")
+                
+                # If we couldn't get the document content, return the initial response
+                return jsonify(initial_response)
             else:
                 # Log the error
                 app.logger.error(f"API request failed with status code {response.status_code}: {response.text}")
