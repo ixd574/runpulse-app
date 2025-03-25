@@ -80,10 +80,45 @@ def parse_document():
         # Log file information
         app.logger.info(f"File received: {file.filename}")
         
-        # Check if the file type is allowed
-        if not allowed_file(file.filename):
-            app.logger.error("File type not allowed")
-            return jsonify({'error': 'File type not allowed'}), 400
+        # Check if the file is a PDF (RunPulse API only accepts PDFs)
+        if not file.filename.lower().endswith('.pdf'):
+            app.logger.warning(f"Non-PDF file uploaded: {file.filename}")
+            # Return a sample response with a warning for non-PDF files
+            sample_response = {
+                "markdown": "# API Limitation Notice\n\nThe RunPulse API only accepts PDF files. You uploaded a non-PDF file: " + file.filename,
+                "chunking": {
+                    "recursive": [
+                        {
+                            "chunk_number": 1,
+                            "content": "# API Limitation Notice",
+                            "length": 29,
+                            "method": "recursive"
+                        },
+                        {
+                            "chunk_number": 2,
+                            "content": "The RunPulse API only accepts PDF files. You uploaded a non-PDF file: " + file.filename,
+                            "length": 95,
+                            "method": "recursive"
+                        }
+                    ],
+                    "semantic": [
+                        {
+                            "chunk_number": 1,
+                            "content": "The RunPulse API only accepts PDF files. You uploaded a non-PDF file: " + file.filename,
+                            "length": 112,
+                            "method": "semantic"
+                        }
+                    ]
+                },
+                "schema-json": {
+                    "note": "This is sample data. The RunPulse API only accepts PDF files."
+                },
+                "tables": [],
+                "plan-info": {
+                    "note": "This is sample data. The RunPulse API only accepts PDF files."
+                }
+            }
+            return jsonify(sample_response)
         
         # Save the file temporarily
         filename = secure_filename(file.filename)
@@ -94,64 +129,33 @@ def parse_document():
             # Call the RunPulse API
             url = 'https://api.runpulse.com/convert'
             headers = {
-                'x-api-key': API_KEY
+                'x-api-key': API_KEY,
+                'Content-Type': 'application/pdf'  # Explicitly set content type
             }
             
             with open(filepath, 'rb')  as f:
-                files = {'file': (filename, f, 'application/octet-stream')}
-                response = requests.post(url, headers=headers, files=files)
+                file_data = f.read()
+                
+            # Make the API request with the correct content type
+            response = requests.post(
+                url, 
+                headers=headers, 
+                data=file_data
+            )
             
             # Check if the request was successful
             if response.status_code == 200:
                 # Return the API response
                 return jsonify(response.json())
             else:
-                # If API call fails, fall back to sample response
+                # Log the error
                 app.logger.error(f"API request failed with status code {response.status_code}: {response.text}")
                 
-                # For PDF files that fail, provide a more specific error
-                if filename.lower().endswith('.pdf'):
-                    return jsonify({
-                        'error': f'API request failed with status code {response.status_code}',
-                        'message': response.text
-                    }), response.status_code
-                
-                # For non-PDF files, return a sample response with a warning
-                sample_response = {
-                    "markdown": "# Sample Response (API Limitation)\n\nThe RunPulse API only accepts PDF files. This is sample output to demonstrate the interface.",
-                    "chunking": {
-                        "recursive": [
-                            {
-                                "chunk_number": 1,
-                                "content": "# Sample Response (API Limitation)",
-                                "length": 29,
-                                "method": "recursive"
-                            },
-                            {
-                                "chunk_number": 2,
-                                "content": "The RunPulse API only accepts PDF files. This is sample output to demonstrate the interface.",
-                                "length": 95,
-                                "method": "recursive"
-                            }
-                        ],
-                        "semantic": [
-                            {
-                                "chunk_number": 1,
-                                "content": "The RunPulse API only accepts PDF files. This is sample output to demonstrate the interface.",
-                                "length": 112,
-                                "method": "semantic"
-                            }
-                        ]
-                    },
-                    "schema-json": {
-                        "note": "This is sample data. The RunPulse API only accepts PDF files."
-                    },
-                    "tables": [],
-                    "plan-info": {
-                        "note": "This is sample data. The RunPulse API only accepts PDF files."
-                    }
-                }
-                return jsonify(sample_response)
+                # Return error information
+                return jsonify({
+                    'error': f'API request failed with status code {response.status_code}',
+                    'message': response.text
+                }), response.status_code
         
         except Exception as e:
             app.logger.error(f"Error calling API: {str(e)}")
