@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document Parsing App</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            padding-top: 2rem;
+            padding-bottom: 2rem;
+            background-color: #f8f9fa;
+        }
+        .container {
+            max-width: 960px;
+        }
+        .header {
+            padding-bottom: 1rem;
+            margin-bottom: 2rem;
+            border-bottom: 1px solid #e5e5e5;
+        }
+        .file-upload {
+            background-color: white;
+            padding: 2rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+            margin-bottom: 2rem;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            margin-top: 1rem;
+        }
+        .spinner-border {
+            width: 3rem;
+            height: 3rem;
+        }
+        #uploadForm {
+            margin-bottom: 1rem;
+        }
+        #result {
+            display: none;
+            background-color: white;
+            padding: 2rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+        }
+        .format-toggle {
+            margin-bottom: 1rem;
+        }
+        pre {
+            background-color: #f8f9fa;
+            padding: 1rem;
+            border-radius: 0.25rem;
+            overflow-x: auto;
+        }
+        .markdown-content {
+            padding: 1rem;
+            background-color: white;
+        }
+        table {
+            width: 100%;
+            margin-bottom: 1rem;
+            color: #212529;
+            border-collapse: collapse;
+        }
+        table th,
+        table td {
+            padding: 0.75rem;
+            vertical-align: top;
+            border: 1px solid #dee2e6;
+        }
+        table thead th {
+            vertical-align: bottom;
+            border-bottom: 2px solid #dee2e6;
+            background-color: #f8f9fa;
+        }
+        table tbody tr:nth-of-type(odd) {
+            background-color: rgba(0, 0, 0, 0.05);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Document Parsing App</h1>
+            <p class="lead">Upload any supported file for intelligent document processing</p>
+        </div>
+
+        <div class="file-upload">
+            <h2>Upload File</h2>
+            <p>Supported file types: PDF, DOCX, DOC, TXT, CSV, XLS, XLSX, JPG, JPEG, PNG</p>
+            
+            <form id="uploadForm" enctype="multipart/form-data">
+                <div class="mb-3">
+                    <label for="file" class="form-label">Select a file to process</label>
+                    <input type="file" class="form-control" id="file" name="file" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Process File</button>
+            </form>
+            
+            <div class="loading">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-2">Processing your file. This may take a moment...</p>
+            </div>
+        </div>
+
+        <div id="result">
+            <h2>Results</h2>
+            
+            <div class="format-toggle">
+                <div class="btn-group" role="group">
+                    <button type="button" class="btn btn-outline-primary active" id="markdownBtn">Markdown</button>
+                    <button type="button" class="btn btn-outline-primary" id="jsonBtn">JSON</button>
+                </div>
+            </div>
+            
+            <div id="markdownView" class="markdown-content"></div>
+            <pre id="jsonView" style="display: none;"></pre>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const uploadForm = document.getElementById('uploadForm');
+            const loading = document.querySelector('.loading');
+            const result = document.getElementById('result');
+            const markdownBtn = document.getElementById('markdownBtn');
+            const jsonBtn = document.getElementById('jsonBtn');
+            const markdownView = document.getElementById('markdownView');
+            const jsonView = document.getElementById('jsonView');
+            
+            let resultData = null;
+
+            uploadForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const formData = new FormData(uploadForm);
+                
+                // Show loading spinner
+                loading.style.display = 'block';
+                result.style.display = 'none';
+                
+                fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    resultData = data;
+                    
+                    // Format and display the results
+                    displayResults(data);
+                    
+                    // Hide loading spinner and show results
+                    loading.style.display = 'none';
+                    result.style.display = 'block';
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error processing file: ' + error.message);
+                    loading.style.display = 'none';
+                });
+            });
+            
+            // Toggle between markdown and JSON views
+            markdownBtn.addEventListener('click', function() {
+                markdownBtn.classList.add('active');
+                jsonBtn.classList.remove('active');
+                markdownView.style.display = 'block';
+                jsonView.style.display = 'none';
+                
+                // If we have result data, redirect to markdown view
+                if (resultData) {
+                    window.location.href = '/view/markdown';
+                }
+            });
+            
+            jsonBtn.addEventListener('click', function() {
+                jsonBtn.classList.add('active');
+                markdownBtn.classList.remove('active');
+                jsonView.style.display = 'block';
+                markdownView.style.display = 'none';
+            });
+            
+            function displayResults(data) {
+                // Display JSON view if JSON button is active
+                jsonView.textContent = JSON.stringify(data, null, 2);
+                
+                // Only redirect to markdown view if markdown button is active
+                if (markdownBtn.classList.contains('active')) {
+                    window.location.href = '/view/markdown';
+                }
+            }
+        });
+    </script>
+</body>
+</html>
